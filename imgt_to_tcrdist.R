@@ -35,6 +35,13 @@ col_vals <- c('id','organism','chain',
               'aligned_protseq',
               'cdr_columns','cdrs')
 
+rough_stats_df <- as.data.frame(
+  str_split(
+    names(in_AA), 
+    pattern = '[|]',
+    simplify = T)
+  )
+
 # functions to parse and annotate entries ====
 species_assigner <- function(gene, species){
   
@@ -56,34 +63,33 @@ species_assigner <- function(gene, species){
   return(new_species)
 }
 
-V_gene_parser <- function(seq){ 
+V_gene_parser <- function(seq, species, len){ 
   
-  find_gaps <- str_locate_all( seq ,'\\.+')[[1]]
-  gappos_front <- find_gaps[,1][2:nrow(find_gaps)] -3
-  gappos_back <- find_gaps[,2][2:nrow(find_gaps)] + 3
-  
-  cdr1 <- substr(seq, gappos_front[1],gappos_back[1])
-  cdr2 <-substr(seq, gappos_front[2],gappos_back[2])
-  cdr2.5 <- substr(seq, 81,86)
+  cdr1 <- substr(seq, 27, 38) #IMGT gap settings
+  cdr2 <-substr(seq, 56, 65) #IMGT gap settings
+  cdr2.5 <- substr(seq, 81,86) #IMGT gap settings
   cdr3_start <- tail(str_locate_all(seq, 'C')[[1]][,1], n=1)
-  cdr3_stop <- cdr3_start + 8 #number of gaps at end seems species specific
-  cdr3 <- substr(seq, cdr3_start, cdr3_stop)
-  gaps_to_add <- (cdr3_stop-cdr3_start)-nchar(cdr3)
+  cdr3 <- substr(seq, cdr3_start, len)
+  #gaps_to_add <- (cdr3_stop-cdr3_start)-nchar(cdr3)
   
-  cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
+  #cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
   
   CDR_columns <- paste(
-    paste(gappos_front[1], gappos_back[1], sep = '-'),
-    paste(gappos_front[2], gappos_back[2], sep = '-'),
+    paste(27, 38, sep = '-'),
+    paste(56, 65, sep = '-'),
     paste(81, 86, sep = '-'),
-    paste(cdr3_start, cdr3_stop, sep = '-'),
+    paste(cdr3_start, len, sep = '-'),
     sep = ';'
   )
+  if (grepl('ig',species)){
+    CDRs <- paste(cdr1,cdr2,cdr2.5,cdr3,sep = ';')
+  } else {
+    CDRs <- paste(cdr1,cdr2,cdr3,sep = ';')
+  }
   
-  CDRs <- paste(cdr1,cdr2,cdr2.5,cdr3,sep = ';')
   
   return(list(CDR_columns, CDRs))
-}
+} #something off with gaps here
 
 J_gene_parser <- function(seq, species, chain){
   
@@ -113,7 +119,7 @@ J_gene_parser <- function(seq, species, chain){
   
 
   seq_out <- subseq(seq, 1, ending)
-  CDR_columns <- paste('1-', ending)
+  CDR_columns <- paste0('1-', ending)
 
   
   return(list(CDR_columns, seq_out))
@@ -126,11 +132,15 @@ for (i in seq_along(in_AA)){
 
   name_in <- str_split(names(in_AA)[i], pattern = '[|]',simplify = T)
   
-  if( name_in[[1,4]] == "F" & grepl("partial",name_in[[1,14]]) == F){
+  if( name_in[[1,4]] == "F" & 
+      grepl("partial",name_in[[1,14]]) == F &
+      grepl('[VJ]-REGION', name_in[[1,5]]) ) {
     
     gene <- name_in[[1,2]]
     speciesx <- name_in[[1,3]]
     frame <- name_in[[1,8]]
+    
+    len <- as.integer(str_split(name_in[[1,13]], '=', simplify = T)[,2])
     
     chain <- case_when(
       grepl('TR[AD][VJ]',gene) | grepl('IG[KL][VJ]',gene) ~ 'A',
@@ -145,10 +155,10 @@ for (i in seq_along(in_AA)){
       region <- gsub('-REGION','',name_in[[1,5]])
       seq <- as.character(in_AA)[[i]]
       if (region =='V'){
-        CDR_info <- V_gene_parser(seq)
-      } else if (region =='J'){
+        CDR_info <- V_gene_parser(seq, species, len)
+      } else {
         CDR_info <- J_gene_parser(seq, species, chain)
-      }
+      } 
       
       
       out <- c(gene, 
@@ -158,8 +168,9 @@ for (i in seq_along(in_AA)){
                tolower(as.character(in_NT[[i]])),
                paste0('+',frame),
                seq,
-               CDR_info,
-               CDRs)
+               CDR_info[[1]],
+               CDR_info[[2]])
+      
       names(out) <- col_vals
       
       list_length <- length(paired_NT_AA) + 1
@@ -174,6 +185,9 @@ for (i in seq_along(in_AA)){
 #bind back together
 ref_db <- do.call(rbind, paired_NT_AA)
 
+#runs through now. bit slow. 
+#might prefilter to just VDJ to save some time.
+#need to add D region
 #need to duplicate the TRAVs with the '_gd' added to the species
 
 
