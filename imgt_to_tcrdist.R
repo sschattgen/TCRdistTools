@@ -1,14 +1,37 @@
 require(tidyverse)
 require(Biostrings)
 
-#stuck at 1477
 
 white_list_species <- c(
   "Homo sapiens", 
-  "Mus musculus", 
-  "Macaca mulatta", 
-  "Bos taurus"
+  "Macaca mulatta_rheMacS_CGG.01",
+  "Macaca mulatta_RUp15",
+  "Macaca mulatta_AG07107",
+  "Macaca mulatta_17573",
+  "Macaca mulatta",
+  "Bos taurus",
+  "Bos taurus_Holstein",
+  "Bos taurus_Hereford", 
+  "Mus musculus_C57BL/10",
+  "Mus musculus_C57BL/6",
+  "Mus musculus_C57BL/6J",
+  "Mus musculus_BALB/cJ",
+  "Mus musculus_BALB/c",
+  "Mus musculus_C3H",
+  "Mus musculus_B10.A",
+  "Mus musculus_A/J" 
   )
+
+stat_df_cols <- c('accession','gene','species',
+                  'functionality','label','nuc_start_stop',
+                  'nuc_length','codon_start','5p_nt_add',
+                  '3p_nt_sub','n_nt_errors','aa_length',
+                  'aa_gap_length','partial','rev_complement')
+
+col_vals <- c('id','organism','chain',
+              'region','nucseq','frame',
+              'aligned_protseq',
+              'cdr_columns','cdrs')
 
 #download imgt refs ====
 tmp <- tempdir()
@@ -24,23 +47,41 @@ download.file("https://www.imgt.org/download/GENE-DB/IMGTGENEDB-ReferenceSequenc
 #read in and filter ====
 in_AA <- readAAStringSet(AAseq_file)
 in_NT <- readDNAStringSet(nucseq_file)
-
 keep_list <- which(str_split(names(in_AA), pattern = '[|]',simplify = T)[,3] %in% white_list_species)
-
 in_AA <-in_AA[keep_list]
 in_NT <-in_NT[keep_list]
 
-col_vals <- c('id','organism','chain',
-              'region','nucseq','frame',
-              'aligned_protseq',
-              'cdr_columns','cdrs')
-
+# stats ====
 rough_stats_df <- as.data.frame(
   str_split(
     names(in_AA), 
     pattern = '[|]',
     simplify = T)
-  )
+) %>%
+  select(-V16) %>%
+  mutate(V13 = as.integer(str_split(V13,'=',simplify = T)[,2]))
+
+colnames(rough_stats_df) <- stat_df_cols
+
+filtered_stats_df <- rough_stats_df %>%
+  filter(grepl('[VDJ]-REGION', label)) %>%
+  mutate(gene_family = str_extract(gene,'^[TI][RG][ABGDKLH][VJD]')) %>%
+  mutate(species2 = case_when(
+    grepl('Homo sapiens', species) ~ 'human',
+    grepl('Mus musculus', species) ~ 'mouse',
+    grepl('Macaca mulatta', species) ~ 'rhesus',
+    grepl('Bos taurus',species) ~ 'bovine',
+    .default = species))
+
+length_df <- filtered_stats_df %>%
+  filter(functionality =='F' & grepl('^[TI][RG][ABGDKLH]V',gene)) %>%
+  group_by(species2, gene_family)  %>%
+  summarise(max_length = max(aa_gap_length)) %>% 
+  pivot_wider( values_from = 'max_length', names_from = 'gene_family')
+
+length_mat <- as.matrix(length_df[,2:ncol(length_df)])
+rownames(length_mat) <- length_df[[1]]
+
 
 # functions to parse and annotate entries ====
 species_assigner <- function(gene, species){
@@ -53,24 +94,28 @@ species_assigner <- function(gene, species){
 
   species2 <- case_when(
     species =='Homo sapiens' ~'human',
-    species =='Mus musculus' ~'mouse',
-    species =='Macaca mulatta' ~'rhesus',
-    species =='Bos taurus' ~ 'bovine',
+    grepl('Mus musculus', species) ~ 'mouse',
+    grepl('Macaca mulatta', species) ~ 'rhesus',
+    grepl('Bos taurus',species) ~ 'bovine'
     )
+  
   new_species <- paste0(species2, chain2)
   
 
   return(new_species)
 }
 
-V_gene_parser <- function(seq, species, len){ 
+V_gene_parser <- function(seq, gene_family, species){ 
   
+  species3 <- str_split(species,'_', simplify = T)[,1]
+  
+  end_length <- length_mat[[species3,gene_family]]
   cdr1 <- substr(seq, 27, 38) #IMGT gap settings
   cdr2 <-substr(seq, 56, 65) #IMGT gap settings
   cdr2.5 <- substr(seq, 81,86) #IMGT gap settings
   cdr3_start <- tail(str_locate_all(seq, 'C')[[1]][,1], n=1)
-  cdr3 <- substr(seq, cdr3_start, len)
-  #gaps_to_add <- (cdr3_stop-cdr3_start)-nchar(cdr3)
+  cdr3 <- substr(seq, cdr3_start, nchar(seq))
+  gaps_to_add <- (end_length-cdr3_start)-nchar(cdr3)
   
   #cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
   
@@ -78,9 +123,10 @@ V_gene_parser <- function(seq, species, len){
     paste(27, 38, sep = '-'),
     paste(56, 65, sep = '-'),
     paste(81, 86, sep = '-'),
-    paste(cdr3_start, len, sep = '-'),
+    paste(cdr3_start, end_length, sep = '-'),
     sep = ';'
   )
+  
   if (grepl('ig',species)){
     CDRs <- paste(cdr1,cdr2,cdr2.5,cdr3,sep = ';')
   } else {
@@ -89,7 +135,7 @@ V_gene_parser <- function(seq, species, len){
   
   
   return(list(CDR_columns, CDRs))
-} #something off with gaps here
+} 
 
 J_gene_parser <- function(seq, species, chain){
   
@@ -126,7 +172,7 @@ J_gene_parser <- function(seq, species, chain){
 }
 
 
-#run through the list and parse entries
+#run through the list and parse entries ====
 paired_NT_AA <- list()
 for (i in seq_along(in_AA)){
 
@@ -134,17 +180,17 @@ for (i in seq_along(in_AA)){
   
   if( name_in[[1,4]] == "F" & 
       grepl("partial",name_in[[1,14]]) == F &
-      grepl('[VJ]-REGION', name_in[[1,5]]) ) {
+      grepl('[VDJ]-REGION', name_in[[1,5]]) ) {
     
     gene <- name_in[[1,2]]
     speciesx <- name_in[[1,3]]
     frame <- name_in[[1,8]]
-    
+    gene_family <- str_extract(gene,'^[TI][RG][ABGDKLH][VJD]')
     len <- as.integer(str_split(name_in[[1,13]], '=', simplify = T)[,2])
     
     chain <- case_when(
-      grepl('TR[AD][VJ]',gene) | grepl('IG[KL][VJ]',gene) ~ 'A',
-      grepl('TR[BG][VJ]',gene) | grepl('IGH[VJ]',gene) ~ 'B',
+      grepl('TR[AD][VDJ]',gene) | grepl('IG[KL][VDJ]',gene) ~ 'A',
+      grepl('TR[BG][VDJ]',gene) | grepl('IGH[VDJ]',gene) ~ 'B',
       .default = 'X'
     )
     
@@ -155,10 +201,12 @@ for (i in seq_along(in_AA)){
       region <- gsub('-REGION','',name_in[[1,5]])
       seq <- as.character(in_AA)[[i]]
       if (region =='V'){
-        CDR_info <- V_gene_parser(seq, species, len)
-      } else {
+        CDR_info <- V_gene_parser(seq, gene_family, species)
+      } else if (region =='J'){
         CDR_info <- J_gene_parser(seq, species, chain)
-      } 
+      } else {
+        next
+      }
       
       
       out <- c(gene, 
