@@ -47,7 +47,8 @@ download.file("https://www.imgt.org/download/GENE-DB/IMGTGENEDB-ReferenceSequenc
 #read in and filter ====
 in_AA <- readAAStringSet(AAseq_file)
 in_NT <- readDNAStringSet(nucseq_file)
-keep_list <- which(str_split(names(in_AA), pattern = '[|]',simplify = T)[,3] %in% white_list_species)
+keep_list <- which(str_split(names(in_AA), pattern = '[|]',simplify = T)[,3] %in% white_list_species & 
+                     grepl('[VDJ]-REGION', str_split(names(in_AA), pattern = '[|]',simplify = T)[,5]))
 in_AA <-in_AA[keep_list]
 in_NT <-in_NT[keep_list]
 
@@ -115,9 +116,8 @@ V_gene_parser <- function(seq, gene_family, species){
   cdr2.5 <- substr(seq, 81,86) #IMGT gap settings
   cdr3_start <- tail(str_locate_all(seq, 'C')[[1]][,1], n=1)
   cdr3 <- substr(seq, cdr3_start, nchar(seq))
-  gaps_to_add <- (end_length-cdr3_start)-nchar(cdr3)
-  
-  #cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
+  gaps_to_add <- (end_length-(cdr3_start-1))-nchar(cdr3)
+  cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
   
   CDR_columns <- paste(
     paste(27, 38, sep = '-'),
