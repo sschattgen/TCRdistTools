@@ -157,7 +157,7 @@ J_gene_parser <- function(seq, gene_family, species){
     species =='bovine' & chain == 'IGHJ' ~ 7,
     species =='bovine' & chain %in% c('IGKJ','IGLJ') ~ 3,
     species =='bovine' & chain == 'TRAJ' ~ 12,
-    species =='bovine' & chain == c('TRBJ','TRGJ') ~ 8,
+    species =='bovine' & chain %in% c('TRBJ','TRGJ') ~ 8,
     species =='bovine' & chain == 'TRDJ' ~ 9,
     species =='human' & chain == 'IGHJ' ~ 10,
     species =='human' & chain %in% c('IGKJ','IGLJ') ~ 3,
