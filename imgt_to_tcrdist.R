@@ -19,7 +19,12 @@ white_list_species <- c(
   "Mus musculus_BALB/c",
   "Mus musculus_C3H",
   "Mus musculus_B10.A",
-  "Mus musculus_A/J" 
+  "Mus musculus_A/J",
+  "Mus musculus_C58",
+  "Mus musculus_SK",
+  "Mus musculus_DBA/2J",
+  "Mus musculus_SJL"
+  
   )
 
 stat_df_cols <- c('accession','gene','species',
@@ -75,7 +80,7 @@ filtered_stats_df <- rough_stats_df %>%
     .default = species))
 
 length_df <- filtered_stats_df %>%
-  filter(functionality =='F' & grepl('^[TI][RG][ABGDKLH]V',gene)) %>%
+  filter(functionality =='F') %>%
   group_by(species2, gene_family)  %>%
   summarise(max_length = max(aa_gap_length)) %>% 
   pivot_wider( values_from = 'max_length', names_from = 'gene_family')
@@ -137,31 +142,42 @@ V_gene_parser <- function(seq, gene_family, species){
   return(list(CDR_columns, CDRs))
 } 
 
-J_gene_parser <- function(seq, species, chain){
+J_gene_parser <- function(seq, gene_family, species){
+  chain <- gene_family
+  species <- str_split(species,'_', simplify = T)[,1]
+  max_length <- length_mat[[species3, gene_family]]
+  
+  if (nchar(seq) < max_length){
+    gaps_to_add <- max_length-nchar(seq)
+    seq <- paste0(paste(rep('.',gaps_to_add),collapse = ''), seq)
+  }
+  
   
   ending <- case_when(
-    species =='human' & chain == 'A' ~ 12,
-    species =='human' & chain == 'B' ~ 8,
-    species =='mouse' & chain == 'A' ~ 13,
-    species =='mouse' & chain == 'B' ~ 8,
-    species =='rhesus' & chain == 'A' ~ 11,
-    species =='rhesus' & chain == 'B' ~ 8,
-    species =='bovine' & chain == 'A' ~ 9,
-    species =='bovine' & chain == 'B' ~ 7,
-    species =='mouse_gd' & chain == 'A' ~ 9,
-    species =='mouse_gd' & chain == 'B' ~ 9,
-    species =='human_gd' & chain == 'A' ~ 11,
-    species =='human_gd' & chain == 'B' ~ 9,
-    species =='rhesus_gd' & chain == 'A' ~ 6,
-    species =='rhesus_gd' & chain == 'B' ~ 7,
-    species =='bovine_gd' & chain == 'B' ~ 8,
-    species =='human_ig' & chain == 'A' ~ 11,
-    species =='human_ig' & chain == 'B' ~ 9,
-    species =='mouse_ig' & chain == 'A' ~ 3,
-    species =='mouse_ig' & chain == 'B' ~ 5,
-    species =='bovine_ig' & chain == 'A' ~ 3,
-    species =='bovine_ig' & chain == 'B' ~ 5
-  )
+    species =='bovine' & chain == 'IGHJ' ~ 7,
+    species =='bovine' & chain %in% c('IGKJ','IGLJ') ~ 3,
+    species =='bovine' & chain == 'TRAJ' ~ 12,
+    species =='bovine' & chain == c('TRBJ','TRGJ') ~ 8,
+    species =='bovine' & chain == 'TRDJ' ~ 9,
+    species =='human' & chain == 'IGHJ' ~ 10,
+    species =='human' & chain %in% c('IGKJ','IGLJ') ~ 3,
+    species =='human' & chain == 'TRAJ' ~ 12,
+    species =='human' & chain == 'TRBJ' ~ 8,
+    species =='human' & chain == 'TRDJ' ~ 9,
+    species =='human' & chain == 'TRGJ' ~ 11, 
+    species =='rhesus' & chain == 'IGHJ' ~ 7,
+    species =='rhesus' & chain %in% c('IGKJ','IGLJ') ~ 3,
+    species =='rhesus' & chain == 'TRAJ' ~ 12,
+    species =='rhesus' & chain == 'TRBJ' ~ 8,
+    species =='rhesus' & chain == 'TRDJ' ~ 9,
+    species =='rhesus' & chain == 'TRGJ' ~ 11, 
+    species =='mouse' & chain == 'IGHJ' ~ 7,
+    species =='mouse' & chain %in% c('IGKJ','IGLJ') ~ 3,
+    species =='mouse' & chain == 'TRAJ' ~ 12,
+    species =='mouse' & chain == 'TRBJ' ~ 7,
+    species =='mouse' & chain == 'TRDJ' ~ 9,
+    species =='mouse' & chain == 'TRGJ' ~ 8
+  )[1]
   
 
   seq_out <- subseq(seq, 1, ending)
@@ -203,7 +219,7 @@ for (i in seq_along(in_AA)){
       if (region =='V'){
         CDR_info <- V_gene_parser(seq, gene_family, species)
       } else if (region =='J'){
-        CDR_info <- J_gene_parser(seq, species, chain)
+        CDR_info <- J_gene_parser(seq, gene_family, species)
       } else {
         next
       }
@@ -231,7 +247,7 @@ for (i in seq_along(in_AA)){
 }
 
 #bind back together
-ref_db <- do.call(rbind, paired_NT_AA)
+ref_db <- as.data.frame(do.call(rbind, paired_NT_AA))
 
 #runs through now. bit slow. 
 #might prefilter to just VDJ to save some time.
