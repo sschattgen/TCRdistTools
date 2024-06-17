@@ -1,31 +1,89 @@
 require(tidyverse)
 require(Biostrings)
-
+#setwd("Z:/ResearchHome/Groups/thomagrp/home/sschattg/TCRref")
 # define the species to process and some other info ====
 
 white_list_species <- c(
-  "Homo sapiens", 
-  "Macaca mulatta_rheMacS_CGG.01",
-  "Macaca mulatta_RUp15",
+  "Bos taurus_Holstein",
+  "Bos taurus_Hereford",
+  "Bos taurus",
+  "Homo sapiens",
   "Macaca mulatta_AG07107",
   "Macaca mulatta_17573",
+  "Macaca mulatta_RUp15",
+  "Macaca mulatta_rheMacS_CGG.01",
   "Macaca mulatta",
-  "Bos taurus",
-  "Bos taurus_Holstein",
-  "Bos taurus_Hereford", 
-  "Mus musculus_C57BL/10",
-  "Mus musculus_C57BL/6",
+  "Macaca mulatta_IGLV1c",
+  "Macaca mulatta_IGLV1ps3",
+  "Macaca mulatta_IGLV1a",
+  "Macaca mulatta_IGLV1b",
+  "Macaca mulatta_IGLV1d",
+  "Macaca mulatta_IGLV1ps2",
+  "Macaca mulatta_IGLV2j",
+  "Macaca mulatta_IGLV2e",
+  "Macaca mulatta_IGLV2f",
+  "Macaca mulatta_IGLV2b",
+  "Macaca mulatta_IGLV2c",
+  "Macaca mulatta_IGLV2d",
+  "Macaca mulatta_IGLV2g",
+  "Macaca mulatta_IGLV2i",
+  "Macaca mulatta_IGLV3a",
+  "Macaca mulatta_IGLV3b",
+  "Macaca mulatta_IGLV3e",
+  "Macaca mulatta_IGLV3f",
+  "Macaca mulatta_IGLV3g",
+  "Macaca mulatta_IGLV3i",
+  "Macaca mulatta_IGLV3k",
+  "Macaca mulatta_IGLV3l",
+  "Macaca mulatta_IGLV3m",
+  "Macaca mulatta_IGLV3n",
+  "Macaca mulatta_IGLV3o",
+  "Macaca mulatta_IGLV3p",
+  "Macaca mulatta_IGLV3q",
+  "Macaca mulatta_IGLV3c",
+  "Macaca mulatta_IGLV3h",
+  "Macaca mulatta_IGLV3j",
+  "Macaca mulatta_IGLV4b",
+  "Macaca mulatta_IGLV4a",
+  "Macaca mulatta_IGLV5c",
+  "Macaca mulatta_IGLV5d",
+  "Mus musculus_BALB/c",
+  "Mus musculus_A/J",
+  "Mus musculus_129/sv",
+  "Mus musculus_129/Sv",
+  "Mus musculus_MRL/lpr",
+  "Mus musculus_DBA/2J",
+  "Mus musculus_CB.20",
   "Mus musculus_C57BL/6J",
   "Mus musculus_BALB/cJ",
-  "Mus musculus_BALB/c",
-  "Mus musculus_C3H",
-  "Mus musculus_B10.A",
-  "Mus musculus_A/J",
+  "Mus musculus",
+  "Mus musculus_C57BL/6",
+  "Mus musculus_C57BL/10",
+  "Mus musculus_NFS",
+  "Mus musculus_NZB",
+  "Mus musculus_BALB.K",
   "Mus musculus_C58",
+  "Mus musculus_NZB/BINJ",
+  "Mus musculus_CE/J",
+  "Mus musculus_C3H",
+  "Mus musculus_PERU",
+  "Mus musculus_AKR",
+  "Mus musculus domesticus",
+  "Mus musculus_O20/A",
+  "Mus musculus castaneus",
+  "Mus musculus molossinus_MOLF/Ei",
+  "Mus musculus musculus",
   "Mus musculus_SK",
-  "Mus musculus_DBA/2J",
-  "Mus musculus_SJL"
-  
+  "Mus musculus_PERA",
+  "Mus musculus_MRL",
+  "Mus musculus_129S1_SvImJ",
+  "Mus musculus_B10.D2-H2dm1",
+  "Mus musculus_B10.A",
+  "Mus musculus_Std:ddY",
+  "Mus musculus_129/SvJ",
+  "Mus musculus_SJL/J",
+  "Mus musculus_PWK",
+  "Mus musculus_NOD/SCID"
   )
 
 stat_df_cols <- c('accession','gene','species',
@@ -127,26 +185,27 @@ species_assigner <- function(gene, species){
 
 V_gene_parser <- function(seq, gene_family, species){ # 
   
+  CDRlimits <- CDRpositions(species, gene_family)
+  CDRbegin <- CDR3start(species, gene_family)
   species3 <- str_split(species,'_', simplify = T)[,1]
   end_length <- length_mat[[species3,gene_family]]
   
-  cdr1 <- substr(seq, 27, 38) #IMGT gap settings
-  cdr2 <-substr(seq, 56, 65) #IMGT gap settings
-  cdr2.5 <- substr(seq, 81,86) #IMGT gap settings
-  cdr3_start <- tail(str_locate_all(seq, 'C')[[1]][,1], n=1)
-  cdr3 <- substr(seq, cdr3_start, nchar(seq))
-  gaps_to_add <- (end_length-(cdr3_start-1))-nchar(cdr3)
+  cdr1 <- substr(seq, CDRlimits[1], CDRlimits[2]) #IMGT gap settings
+  cdr2 <-substr(seq, CDRlimits[3], CDRlimits[4]) #IMGT gap settings
+  cdr2.5 <- substr(seq, CDRlimits[5],CDRlimits[6]) #IMGT gap settings
+  cdr3 <- substr(seq, CDRbegin, nchar(seq))
+  gaps_to_add <- (end_length-(CDRbegin-1))-nchar(cdr3)
   cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
   
   CDR_columns <- paste(
-    paste(27, 38, sep = '-'),
-    paste(56, 65, sep = '-'),
-    paste(81, 86, sep = '-'),
-    paste(cdr3_start, end_length, sep = '-'),
+    paste( CDRlimits[1],  CDRlimits[2], sep = '-'),
+    paste( CDRlimits[3],  CDRlimits[4], sep = '-'),
+    paste( CDRlimits[5],  CDRlimits[6], sep = '-'),
+    paste(CDRbegin, end_length, sep = '-'),
     sep = ';'
   )
   
-  if (grepl('ig',species)){
+  if (grepl('ig',species) == F){
     CDRs <- paste(cdr1,cdr2,cdr2.5,cdr3,sep = ';')
   } else {
     CDRs <- paste(cdr1,cdr2,cdr3,sep = ';')
@@ -166,7 +225,7 @@ J_gene_parser <- function(seq, gene_family, species){
     seq <- paste0(paste(rep('.',gaps_to_add),collapse = ''), seq)
   }
   
-  ending <- CDR3ending(species, gene_family)
+  ending <- CDR3ending(speciesX, gene_family)
   seq_out <- subseq(seq, 1, ending)
   CDR_columns <- paste0('1-', ending)
 
@@ -183,7 +242,7 @@ D_gene_parser <- function(seq, gene_family, species){
     seq <- paste0(seq, paste(rep('.',gaps_to_add),collapse = ''))
   }
   
-  CDR_columns <- ''
+  CDR_columns <- paste0('1-', max_length)
   
   return(list(CDR_columns, seq))
 }
@@ -191,7 +250,18 @@ D_gene_parser <- function(seq, gene_family, species){
 # table defining the end bounds of the CDR3 in the J segments
 # for each species/gene family. The position is fixed within a combo but differ across (like the lengths)
 # Unlike the lengths, these are defined manually. 
-# Adding a new species would require updating the case switch in the fxn below.
+# Adding a new species would require updating the case switch in the fxns below.
+
+
+CDRpositions <- function(species, gene_family) {
+  case_when(
+    species %in% c('mouse','mouse_gd')  & gene_family %in% c('TRAV','TRDV') ~ c(28,39,57,66,82,88),
+    species %in% c('mouse','mouse_gd') & gene_family %in% c('TRBV','TRGV') ~ c(27,38,56,65,81,86),
+    species %in% c('rhesus','rhesus_gd') & gene_family %in% c('TRAV','TRDV') ~ c(28,39,57,66,82,88),  
+    species %in% c('rhesus','rhesus_gd') & gene_family %in% c('TRBV','TRGV') ~ c(27,38,56,65,81,86),  
+    species %in% c('human','human_gd','human_ig','rhesus_ig','mouse_ig','bovine_ig','bovine','bovine_gd')  ~ c(27,38,56,65,81,86),
+  )
+}
 
 CDR3ending <- function(species, chain) {
   case_when(
@@ -218,7 +288,41 @@ CDR3ending <- function(species, chain) {
     species =='mouse' & chain == 'TRBJ' ~ 7,
     species =='mouse' & chain == 'TRDJ' ~ 9,
     species =='mouse' & chain == 'TRGJ' ~ 8
-  )[1]
+  )
+}
+
+CDR3start <- function(species, chain) {
+  case_when(
+    species =='bovine' & gene_family == 'TRAV' ~ 104,
+    species =='bovine' & gene_family == 'TRBV' ~ 105,
+    species =='bovine_gd' & gene_family == 'TRDV' ~ 110,
+    species =='bovine_gd' & gene_family == 'TRGV' ~ 106,
+    species =='bovine_ig' & gene_family == 'IGHV' ~ 104,
+    species =='bovine_ig' & gene_family == 'IGLV' ~ 107,
+    species =='bovine_ig' & gene_family == 'IGKV' ~ 105,
+    species =='human' & gene_family == 'TRAV' ~ 104,
+    species =='human' & gene_family == 'TRBV' ~ 104,
+    species =='human_gd' & gene_family == 'TRDV' ~ 104,
+    species =='human_gd' & gene_family == 'TRGV' ~ 104,
+    species =='human_ig' & gene_family == 'IGHV' ~ 104,
+    species =='human_ig' & gene_family == 'IGLV' ~ 104,
+    species =='human_ig' & gene_family == 'IGKV' ~ 104,
+    species =='mouse' & gene_family == 'TRAV' ~ 106,
+    species =='mouse' & gene_family == 'TRBV' ~ 104,
+    species =='mouse_gd' & gene_family == 'TRDV' ~ 104,
+    species =='mouse_gd' & gene_family == 'TRGV' ~ 104,
+    species =='mouse_ig' & gene_family == 'IGHV' ~ 104,
+    species =='mouse_ig' & gene_family == 'IGLV' ~ 104,
+    species =='mouse_ig' & gene_family == 'IGKV' ~ 104,
+    species =='rhesus' & gene_family == 'TRAV' ~ 106,
+    species =='rhesus' & gene_family == 'TRBV' ~ 105,
+    species =='rhesus_gd' & gene_family == 'TRDV' ~ 104,
+    species =='rhesus_gd' & gene_family == 'TRGV' ~ 105,
+    species =='rhesus_ig' & gene_family == 'IGHV' ~ 106,
+    species =='rhesus_ig' & gene_family == 'IGLV' ~ 105,
+    species =='rhesus_ig' & gene_family == 'IGKV' ~ 107
+    
+  )
 }
 
 # run through the list and parse entries ====
@@ -289,6 +393,35 @@ TRAVtogd <- ref_db %>%
 full_ref_db <- bind_rows(ref_db, TRAVtogd) %>%
   arrange(organism, chain, region)
 
+
+#sanity checks ====
+full_ref_db$aligned_protseq_check <- ''
+full_ref_db$cdr_position_check <- ''
+for (l in seq(nrow(full_ref_db))){
+  
+  
+  cols_in <- full_ref_db[l,'cdr_columns']
+  aligned_protseq = full_ref_db[l,'aligned_protseq']
+  
+  cdr_columns <- map(str_split(cols_in,';')[[1]], ~as.integer(str_split(.,'-',simplify = T)))
+  
+  check <- map(cdr_columns, ~substr(aligned_protseq, .[1], .[2]) ) %>%
+    unlist() %>%
+    paste(.,collapse = ';')
+  
+  full_ref_db[l,'cdr_position_check'] = check == full_ref_db[l,'cdrs']
+  
+  
+  trans <- as.character(translate(DNAString(full_ref_db[l,'nucseq'],start = full_ref_db[l,'frame']), no.init.codon = T))
+  aligned_protseq2 <- gsub('[.]','',full_ref_db[l,'aligned_protseq'])
+  full_ref_db[l,'aligned_protseq_check'] = trans == aligned_protseq2
+  
+  
+  
+}
+
+
+
 # write out
 write_tsv(full_ref_db, 'combo_xcr.tsv')
 
@@ -297,3 +430,42 @@ ref_stats <- full_ref_db %>%
   tally(name = 'count')
 
 write_tsv(ref_stats, 'combo_xcr_stats.tsv')
+
+
+#
+
+ctttgacagcacaactcttctttggaaagggaacacaactcatcgtggaaccag	3	..LTAQLFFGKGTQLIVEP	1-9	..LTAQLFF
+
+..LRGAAGRLGGGLLVL
+translate(DNAString('ctggtcactctcaccgaggggttgcctgtgatgctgaactgcacctatcagactatttactcacatcctttccttttctggtatgtgcactatctcaatgaatcccctaggttactcctgaagagctccacagacaacaagaggaccgagcaccaagggttccacgccactctccataagagcagcagctccttccatctgcagaagtcctcagcgcagctgtcagactctgccctgtactactgtgctttgagggct',1))
+translate(reverseComplement(DNAString('ctgagaggcgctgctgggcgtctgggcggaggactcctggttctgg',1)))
+
+
+
+
+nchar('ctttgacagcacaactcttctttggaaagggaacacaactcatcgtggaaccag') - 3 
+
+filter(full_ref_db, aligned_protseq_check ==F) %>% View()
+filter(full_ref_db, cdr_position_check ==F) %>% View()
+
+
+
+
+bad_starts<-ref_db %>%
+  select(organism, gene_family, cdr_columns) %>%
+  filter(grepl('V$',gene_family)) %>%
+  group_by_all() %>%
+  add_tally() %>%
+  distinct_all() %>%
+  group_by(organism, gene_family) %>%
+  add_tally(name= 'N') %>%
+  #filter(N>1) %>%
+  group_split()
+
+
+
+ref_db %>%
+  filter(organism =='mouse_gd') %>%
+  filter(gene_family %in% c('TRDV')) %>%
+  View()
+
