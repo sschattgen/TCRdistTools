@@ -217,8 +217,8 @@ V_gene_parser <- function(seq, gene_family, species){ #
     )
   }
   
-  gaps_to_add <- CDR_info[[3]]-nchar(seq)
-  return(list(CDR_columns, CDRs, gaps_to_add))
+  gaps_to_add2 <- end_length-nchar(seq)
+  return(list(CDR_columns, CDRs, gaps_to_add2))
 } 
 
 J_gene_parser <- function(seq, gene_family, species){
@@ -356,9 +356,8 @@ for (i in seq_along(in_AA)){
     region <- gsub('-REGION','',name_in[[1,5]])
     seq <- as.character(in_AA)[[i]]
     if (region =='V'){
-      
       CDR_info <- V_gene_parser(seq, gene_family, species)
-      seq <- paste0(seq, paste(rep('.',gaps_to_add),collapse = ''))
+      seq <- paste0(seq, paste(rep('.',CDR_info[[3]]),collapse = ''))
     } else if (region =='J') {
       CDR_info <- J_gene_parser(seq, gene_family, species)
       seq <- paste0(paste(rep('.',CDR_info[[3]]),collapse = ''), seq)
@@ -426,7 +425,7 @@ for (l in seq(nrow(full_ref_db))){
   
 }
 
-# write out
+# write out ====
 write_tsv(full_ref_db, 'combo_xcr.tsv')
 
 ref_stats <- full_ref_db %>%
@@ -437,5 +436,5 @@ write_tsv(ref_stats, 'combo_xcr_stats.tsv')
 
 
 # filter(full_ref_db, aligned_protseq_check ==F) %>% View()
-# filter(full_ref_db, cdr_position_check ==F) %>% mutate(len = nchar(cdrs))
+# filter(full_ref_db, cdr_position_check ==F) %>% View()
 
