@@ -197,22 +197,28 @@ V_gene_parser <- function(seq, gene_family, species){ #
   gaps_to_add <- (end_length-(CDRbegin-1))-nchar(cdr3)
   cdr3 <- paste0(cdr3, paste(rep('.',gaps_to_add),collapse = ''))
   
-  CDR_columns <- paste(
-    paste( CDRlimits[1],  CDRlimits[2], sep = '-'),
-    paste( CDRlimits[3],  CDRlimits[4], sep = '-'),
-    paste( CDRlimits[5],  CDRlimits[6], sep = '-'),
-    paste(CDRbegin, end_length, sep = '-'),
-    sep = ';'
-  )
   
-  if (grepl('ig',species) == F){
-    CDRs <- paste(cdr1,cdr2,cdr2.5,cdr3,sep = ';')
-  } else {
+  if (grepl('^IG', gene_family)){
     CDRs <- paste(cdr1,cdr2,cdr3,sep = ';')
+    CDR_columns <- paste(
+      paste( CDRlimits[1],  CDRlimits[2], sep = '-'),
+      paste( CDRlimits[3],  CDRlimits[4], sep = '-'),
+      paste(CDRbegin, end_length, sep = '-'),
+      sep = ';'
+    )
+  } else {
+    CDRs <- paste(cdr1,cdr2,cdr2.5,cdr3,sep = ';')
+    CDR_columns <- paste(
+      paste( CDRlimits[1],  CDRlimits[2], sep = '-'),
+      paste( CDRlimits[3],  CDRlimits[4], sep = '-'),
+      paste( CDRlimits[5],  CDRlimits[6], sep = '-'),
+      paste(CDRbegin, end_length, sep = '-'),
+      sep = ';'
+    )
   }
   
-  
-  return(list(CDR_columns, CDRs))
+  gaps_to_add <- CDR_info[[3]]-nchar(seq)
+  return(list(CDR_columns, CDRs, gaps_to_add))
 } 
 
 J_gene_parser <- function(seq, gene_family, species){
@@ -229,7 +235,7 @@ J_gene_parser <- function(seq, gene_family, species){
   seq_out <- subseq(seq, 1, ending)
   CDR_columns <- paste0('1-', ending)
 
-  return(list(CDR_columns, seq_out))
+  return(list(CDR_columns, seq_out, gaps_to_add))
 }
 
 D_gene_parser <- function(seq, gene_family, species){
@@ -244,7 +250,7 @@ D_gene_parser <- function(seq, gene_family, species){
   
   CDR_columns <- paste0('1-', max_length)
   
-  return(list(CDR_columns, seq))
+  return(list(CDR_columns, seq, gaps_to_add))
 }
 
 # table defining the end bounds of the CDR3 in the J segments
@@ -350,11 +356,15 @@ for (i in seq_along(in_AA)){
     region <- gsub('-REGION','',name_in[[1,5]])
     seq <- as.character(in_AA)[[i]]
     if (region =='V'){
+      
       CDR_info <- V_gene_parser(seq, gene_family, species)
+      seq <- paste0(seq, paste(rep('.',gaps_to_add),collapse = ''))
     } else if (region =='J') {
       CDR_info <- J_gene_parser(seq, gene_family, species)
+      seq <- paste0(paste(rep('.',CDR_info[[3]]),collapse = ''), seq)
     } else {
       CDR_info <- D_gene_parser(seq, gene_family, species)
+      seq <- paste0(seq, paste(rep('.',CDR_info[[3]]),collapse = ''))
     }
     
     
@@ -393,12 +403,10 @@ TRAVtogd <- ref_db %>%
 full_ref_db <- bind_rows(ref_db, TRAVtogd) %>%
   arrange(organism, chain, region)
 
-
 #sanity checks ====
 full_ref_db$aligned_protseq_check <- ''
 full_ref_db$cdr_position_check <- ''
 for (l in seq(nrow(full_ref_db))){
-  
   
   cols_in <- full_ref_db[l,'cdr_columns']
   aligned_protseq = full_ref_db[l,'aligned_protseq']
@@ -411,16 +419,12 @@ for (l in seq(nrow(full_ref_db))){
   
   full_ref_db[l,'cdr_position_check'] = check == full_ref_db[l,'cdrs']
   
-  
-  trans <- as.character(translate(DNAString(full_ref_db[l,'nucseq'],start = full_ref_db[l,'frame']), no.init.codon = T))
+  frame <- as.integer(full_ref_db[l,'frame'])
+  trans <- as.character(translate(DNAString(full_ref_db[l,'nucseq'],start = frame), no.init.codon = T,if.fuzzy.codon = 'X'))
   aligned_protseq2 <- gsub('[.]','',full_ref_db[l,'aligned_protseq'])
   full_ref_db[l,'aligned_protseq_check'] = trans == aligned_protseq2
   
-  
-  
 }
-
-
 
 # write out
 write_tsv(full_ref_db, 'combo_xcr.tsv')
@@ -432,40 +436,6 @@ ref_stats <- full_ref_db %>%
 write_tsv(ref_stats, 'combo_xcr_stats.tsv')
 
 
-#
-
-ctttgacagcacaactcttctttggaaagggaacacaactcatcgtggaaccag	3	..LTAQLFFGKGTQLIVEP	1-9	..LTAQLFF
-
-..LRGAAGRLGGGLLVL
-translate(DNAString('ctggtcactctcaccgaggggttgcctgtgatgctgaactgcacctatcagactatttactcacatcctttccttttctggtatgtgcactatctcaatgaatcccctaggttactcctgaagagctccacagacaacaagaggaccgagcaccaagggttccacgccactctccataagagcagcagctccttccatctgcagaagtcctcagcgcagctgtcagactctgccctgtactactgtgctttgagggct',1))
-translate(reverseComplement(DNAString('ctgagaggcgctgctgggcgtctgggcggaggactcctggttctgg',1)))
-
-
-
-
-nchar('ctttgacagcacaactcttctttggaaagggaacacaactcatcgtggaaccag') - 3 
-
-filter(full_ref_db, aligned_protseq_check ==F) %>% View()
-filter(full_ref_db, cdr_position_check ==F) %>% View()
-
-
-
-
-bad_starts<-ref_db %>%
-  select(organism, gene_family, cdr_columns) %>%
-  filter(grepl('V$',gene_family)) %>%
-  group_by_all() %>%
-  add_tally() %>%
-  distinct_all() %>%
-  group_by(organism, gene_family) %>%
-  add_tally(name= 'N') %>%
-  #filter(N>1) %>%
-  group_split()
-
-
-
-ref_db %>%
-  filter(organism =='mouse_gd') %>%
-  filter(gene_family %in% c('TRDV')) %>%
-  View()
+# filter(full_ref_db, aligned_protseq_check ==F) %>% View()
+# filter(full_ref_db, cdr_position_check ==F) %>% mutate(len = nchar(cdrs))
 
