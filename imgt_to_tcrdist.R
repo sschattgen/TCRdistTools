@@ -426,15 +426,20 @@ for (l in seq(nrow(full_ref_db))){
 }
 
 # write out ====
-write_tsv(full_ref_db, 'combo_xcr.tsv')
 
-ref_stats <- full_ref_db %>%
+full_ref_db2 <- full_ref_db %>% 
+  filter( aligned_protseq_check == T & cdr_position_check == T)
+
+write_tsv(full_ref_db2, 'combo_xcr.tsv')
+
+ref_stats <- full_ref_db2 %>%
   group_by(organism, chain, region) %>%
   tally(name = 'count')
 
 write_tsv(ref_stats, 'combo_xcr_stats.tsv')
 
 
-# filter(full_ref_db, aligned_protseq_check ==F) %>% View()
-# filter(full_ref_db, cdr_position_check ==F) %>% View()
+#human_ig IGHD3-10*02 IGHV5-10-1*02 
+#mouse_ig IGKV1-117*02
+#issue with mouse and rhesus still at line 84 in all_genes.py
 
