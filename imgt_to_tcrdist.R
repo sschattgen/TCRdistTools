@@ -116,9 +116,9 @@ in_AA <- readAAStringSet(AAseq_file)
 in_NT <- readDNAStringSet(nucseq_file)
 
 # filter the entries on species, functionality, gene type
-
+species_split <- str_split( names(in_AA), pattern = '[|]',simplify = T)[,3]
 keep_list <- which(
-  str_split(names(in_AA), pattern = '[|]',simplify = T)[,3] %in% white_list_species & #filter on species
+    species_split %in% white_list_species & #filter on species
     grepl('[VDJ]-REGION', str_split(names(in_AA), pattern = '[|]',simplify = T)[,5]) & #filter on gene regions
     grepl("partial", str_split(names(in_AA), pattern = '[|]',simplify = T)[,14]) == F & #filter out partial
     str_split(names(in_AA), pattern = '[|]',simplify = T)[,4] == 'F'  #filter on functional
@@ -153,13 +153,30 @@ filtered_stats_df <- rough_stats_df %>%
 # the max length per species/gene class varies. Here we're making a table of max
 # lengths so we can add the gaps in
 
-length_df <- filtered_stats_df %>%
+max_length_df <- filtered_stats_df %>%
   group_by(species2, gene_family)  %>%
   summarise(max_length = max(aa_gap_length)) %>% 
   pivot_wider( values_from = 'max_length', names_from = 'gene_family')
 
-length_mat <- as.matrix(length_df[,2:ncol(length_df)])
-rownames(length_mat) <- length_df[[1]]
+
+min_length_df <- filtered_stats_df %>%
+  group_by(species2, gene_family)  %>%
+  summarise(min_length = min(aa_gap_length)) %>% 
+  pivot_wider( values_from = 'min_length', names_from = 'gene_family')
+
+length_df <- bind_rows(
+  mutate(max_length_df, var = 'max'),
+  mutate(min_length_df, var = 'min')
+)
+
+
+length_df2 <- pivot_longer(length_df, cols = IGHD:TRGV, names_to = 'gene') %>%
+  arrange(species2, gene)
+
+write_tsv(length_df2, "C:/Users/sschattg/OneDrive - St. Jude Children's Research Hospital/transfer/imgt_lengths.tsv")
+
+length_mat <- as.matrix(max_length_df[,2:ncol(max_length_df)])
+rownames(length_mat) <- max_length_df[[1]]
 
 # functions to parse and annotate entries ====
 species_assigner <- function(gene, species){
@@ -225,9 +242,9 @@ J_gene_parser <- function(seq, gene_family, species){
 
   speciesX <- str_split(species,'_', simplify = T)[,1]
   max_length <- length_mat[[speciesX, gene_family]]
+  gaps_to_add <- max_length-nchar(seq)
   
-  if (nchar(seq) < max_length){
-    gaps_to_add <- max_length-nchar(seq)
+  if (gaps_to_add > 0){
     seq <- paste0(paste(rep('.',gaps_to_add),collapse = ''), seq)
   }
   
@@ -242,9 +259,9 @@ D_gene_parser <- function(seq, gene_family, species){
 
   speciesX <- str_split(species,'_', simplify = T)[,1]
   max_length <- length_mat[[speciesX, gene_family]]
+  gaps_to_add <- max_length-nchar(seq)
   
-  if (nchar(seq) < max_length){
-    gaps_to_add <- max_length-nchar(seq)
+  if (gaps_to_add > 0){
     seq <- paste0(seq, paste(rep('.',gaps_to_add),collapse = ''))
   }
   
@@ -261,8 +278,25 @@ D_gene_parser <- function(seq, gene_family, species){
 
 CDRpositions <- function(species, gene_family) {
   case_when(
-    species %in% c('mouse','mouse_gd')  & gene_family %in% c('TRAV','TRDV') ~ c(28,39,57,66,82,88),
-    species %in% c('mouse','mouse_gd') & gene_family %in% c('TRBV','TRGV') ~ c(27,38,56,65,81,86),
+    species == 'mouse' & gene_family == 'TRAV' ~ c(28,39,57,66,82,88,106,111),
+    species == 'mouse' & gene_family == 'TRBV' ~ c(27,38,56,65,81,86,104,108),
+    species == 'mouse_gd' & gene_family == 'TRGV' ~ c(27,38,56,65,81,86,104,109),
+    species == 'mouse_gd' & gene_family == 'TRDV' ~ c(28,39,57,66,82,88,106,111),
+    species == 'mouse_ig' & gene_family %in% c('IGHV','IGLV','IGKV') ~ c(27,38,56,65,81,86,104,116),
+
+    
+
+    species == 'human' & gene_family == 'TRAV' ~ c(27,38,56,65,81,86,104,112),
+    species == 'human' & gene_family == 'TRBV' ~ c(27,38,56,65,81,86,104,109),
+    species == 'human_gd' & gene_family == 'TRGV' ~ c(27,38,56,65,81,86,104,110),
+    species == 'human_gd' & gene_family == 'TRDV' ~ c(27,38,56,65,81,86,104,112),
+    species == 'human_ig' & gene_family %in% c('IGHV','IGLV','IGKV') ~ c(27,38,56,65,81,86,104,116),
+    
+    
+    
+    28-39;57-66;82-88;106-110
+    28-39;57-66;82-88;104-108
+    
     species %in% c('rhesus','rhesus_gd') & gene_family %in% c('TRAV','TRDV') ~ c(28,39,57,66,82,88),  
     species %in% c('rhesus','rhesus_gd') & gene_family %in% c('TRBV','TRGV') ~ c(27,38,56,65,81,86),  
     species %in% c('human','human_gd','human_ig','rhesus_ig','mouse_ig','bovine_ig','bovine','bovine_gd')  ~ c(27,38,56,65,81,86),
@@ -344,8 +378,8 @@ for (i in seq_along(in_AA)){
   len <- as.integer(str_split(name_in[[1,13]], '=', simplify = T)[,2])
   
   chain <- case_when(
-    grepl('TR[AD][VDJ]',gene) | grepl('IG[KL][VDJ]',gene) ~ 'A',
-    grepl('TR[BG][VDJ]',gene) | grepl('IGH[VDJ]',gene) ~ 'B',
+    grepl('TR[AG][VDJ]',gene) | grepl('IG[KL][VDJ]',gene) ~ 'A',
+    grepl('TR[BD][VDJ]',gene) | grepl('IGH[VDJ]',gene) ~ 'B',
     .default = 'X'
   )
   
